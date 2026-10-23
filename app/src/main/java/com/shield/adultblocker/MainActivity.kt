@@ -5,7 +5,6 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.net.VpnService
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
@@ -17,7 +16,7 @@ class MainActivity : Activity() {
 
     private lateinit var statusText: TextView
     private lateinit var btnAccessibility: Button
-    private lateinit var btnVpn: Button
+    private lateinit var btnSafeSearch: Button
     private lateinit var btnAdmin: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,53 +36,41 @@ class MainActivity : Activity() {
         btnAccessibility = Button(this).apply {
             setOnClickListener {
                 if (isAccessibilityEnabled()) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Millisecond Accessibility Blocker is already ACTIVE ✅",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this@MainActivity, "Millisecond Blocker is already ACTIVE ✅", Toast.LENGTH_SHORT).show()
                 } else {
                     startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
             }
         }
 
-        btnVpn = Button(this).apply {
+        btnSafeSearch = Button(this).apply {
             setOnClickListener {
-                val intent = VpnService.prepare(this@MainActivity)
-                if (intent != null) {
-                    startActivityForResult(intent, 100)
-                } else {
-                    onActivityResult(100, RESULT_OK, null)
-                }
+                Toast.makeText(
+                    this@MainActivity,
+                    "SafeSearch Enforcer is Locked ON ✅",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
 
         btnAdmin = Button(this).apply {
             setOnClickListener {
                 if (isDeviceAdminEnabled()) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Uninstall Protection (Device Admin) is already ACTIVE ✅",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this@MainActivity, "Uninstall Protection is already ACTIVE ✅", Toast.LENGTH_SHORT).show()
                 } else {
                     val compName = ComponentName(this@MainActivity, UninstallProtectionReceiver::class.java)
                     val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
                         putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, compName)
-                        putExtra(
-                            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                            "Prevents unauthorized uninstallation of ShieldBlocker."
-                        )
+                        putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Prevents unauthorized uninstallation.")
                     }
-                    startActivityForResult(intent, 200)
+                    startActivity(intent)
                 }
             }
         }
 
         layout.addView(statusText)
         layout.addView(btnAccessibility)
-        layout.addView(btnVpn)
+        layout.addView(btnSafeSearch)
         layout.addView(btnAdmin)
         setContentView(layout)
 
@@ -102,51 +89,37 @@ class MainActivity : Activity() {
     }
 
     private fun updateButtonStates() {
-        btnAccessibility.text = if (isAccessibilityEnabled()) {
-            "1. Millisecond Accessibility Blocker: ACTIVE ✅"
+        val accActive = isAccessibilityEnabled()
+        val adminActive = isDeviceAdminEnabled()
+
+        btnAccessibility.text = if (accActive) {
+            "1. Acessibility: ACTIVE ✅"
         } else {
-            "1. Enable Millisecond Accessibility Blocker"
+            "1. Enable Acessibility"
         }
 
-        btnVpn.text = if (DnsVpnService.isRunning) {
-            "2. SafeSearch & Adult DNS Filter: ACTIVE ✅"
+        btnSafeSearch.text = if (accActive) {
+            "2. SafeSearch Enforcer: ACTIVE ✅"
         } else {
-            "2. Enable SafeSearch & Adult DNS Filter"
+            "2. SafeSearch Enforcer (Auto-Activates with Accessibility)"
         }
 
-        btnAdmin.text = if (isDeviceAdminEnabled()) {
-            "3. Uninstall Protection (Device Admin): ACTIVE ✅"
+        btnAdmin.text = if (adminActive) {
+            "3. Uninstall Protection: ACTIVE ✅"
         } else {
-            "3. Enable Uninstall Protection (Device Admin)"
+            "3. Enable Uninstall Protection"
         }
     }
 
     private fun isAccessibilityEnabled(): Boolean {
         val expectedComponent = ComponentName(this, BlockerAccessibilityService::class.java)
-        val enabledServices = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
-
-        return enabledServices.split(":").any {
-            ComponentName.unflattenFromString(it) == expectedComponent
-        }
+        val enabledServices = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+        return enabledServices.split(":").any { ComponentName.unflattenFromString(it) == expectedComponent }
     }
 
     private fun isDeviceAdminEnabled(): Boolean {
         val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val compName = ComponentName(this, UninstallProtectionReceiver::class.java)
         return dpm.isAdminActive(compName)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 100 && resultCode == RESULT_OK) {
-            startService(Intent(this, DnsVpnService::class.java))
-            btnVpn.text = "2. SafeSearch & Adult DNS Filter: ACTIVE ✅"
-        } else if (requestCode == 100) {
-            Toast.makeText(this, "VPN Permission Denied", Toast.LENGTH_SHORT).show()
-        }
-        updateButtonStates()
     }
 }

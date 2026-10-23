@@ -1,6 +1,9 @@
 package com.shield.adultblocker
 
 import android.accessibilityservice.AccessibilityService
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -51,7 +54,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         val rootNode = rootInActiveWindow ?: return
 
-        // 2. TARGETED TOGGLE DISABLE IN SETTINGS
+        // 2. PERMANENT LOCK FOR ACCESSIBILITY & DEVICE ADMIN IN SETTINGS
         if (packageName.contains("settings") ||
             packageName.contains("packageinstaller") ||
             packageName.contains("permissioncontroller")
@@ -66,8 +69,17 @@ class BlockerAccessibilityService : AccessibilityService() {
         inspectBrowserNodes(rootNode)
     }
 
+    private fun isDeviceAdminCurrentlyActive(): Boolean {
+        return try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val compName = ComponentName(this, UninstallProtectionReceiver::class.java)
+            dpm.isAdminActive(compName)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private fun handleSettingsProtection(rootNode: AccessibilityNodeInfo) {
-        // Backup safety: if the "Stop Shield Real-Time Blocker?" dialog ever appears, click Cancel in 0ms
         if (findNodeByTextOrDesc(rootNode, "Stop Shield Real-Time Blocker") != null ||
             findNodeByTextOrDesc(rootNode, "Turn off Shield") != null
         ) {
@@ -75,17 +87,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             return
         }
 
-        // Check if we are specifically on the "Shield Real-Time Blocker" Accessibility page
         val toggleNode = findNodeByTextOrDesc(rootNode, "Use Shield Real-Time Blocker")
         val optionsNode = findNodeByTextOrDesc(rootNode, "Shield Real-Time Blocker shortcut")
 
         if (toggleNode != null || optionsNode != null) {
-            // Find the exact bounds of the blue "Use Shield Real-Time Blocker" pill
             val bounds = Rect()
             val containerNode = findClickableParent(toggleNode) ?: toggleNode
             containerNode?.getBoundsInScreen(bounds)
 
-            // Fallback coordinates if Android returns empty bounds for the custom switch widget
             if (bounds.width() < 200 || bounds.height() < 50) {
                 val displayMetrics = resources.displayMetrics
                 bounds.set(
@@ -96,24 +105,39 @@ class BlockerAccessibilityService : AccessibilityService() {
                 )
             }
 
-            showDisabledToggleOverlay(bounds)
+            showDisabledToggleOverlay(bounds, "Use Shield Real-Time Blocker   [LOCKED ON 🔒]")
             return
         }
 
-        // Also block "App info" / "Force stop" / "Uninstall" page for ShieldBlocker
+        val isOurDeviceAdminScreen = findNodeByTextOrDesc(rootNode, "Shield Uninstall Protection") != null
+        if (isOurDeviceAdminScreen) {
+            if (!isDeviceAdminCurrentlyActive()) {
+                removeToggleOverlay()
+                return
+            } else {
+                val deactivateNode = findNodeByTextOrDesc(rootNode, "Deactivate")
+                if (deactivateNode != null) {
+                    val bounds = Rect()
+                    val container = findClickableParent(deactivateNode) ?: deactivateNode
+                    container.getBoundsInScreen(bounds)
+                    if (bounds.width() > 100 && bounds.height() > 40) {
+                        showDisabledToggleOverlay(bounds, "Admin Uninstall Protection   [LOCKED ON 🔒]")
+                    }
+                }
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                return
+            }
+        }
+
         val isOurAppInfo = findNodeByTextOrDesc(rootNode, "ShieldBlocker") != null &&
                 (findNodeByTextOrDesc(rootNode, "Force stop") != null ||
-                        findNodeByTextOrDesc(rootNode, "Uninstall") != null)
+                        findNodeByTextOrDesc(rootNode, "Storage & cache") != null)
 
-        val isOurDeviceAdmin = findNodeByTextOrDesc(rootNode, "Shield Uninstall Protection") != null &&
-                findNodeByTextOrDesc(rootNode, "Deactivate") != null
-
-        if (isOurAppInfo || isOurDeviceAdmin) {
+        if (isOurAppInfo) {
             performGlobalAction(GLOBAL_ACTION_BACK)
             return
         }
 
-        // On main Accessibility list or any other Settings page: remove overlay so user can use Settings normally
         removeToggleOverlay()
     }
 
@@ -122,7 +146,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         while (current != null) {
             val rect = Rect()
             current.getBoundsInScreen(rect)
-            if (rect.width() > 300 && rect.height() in 80..400) {
+            if (rect.width() > 300 && rect.height() in 70..400) {
                 return current
             }
             current = current.parent
@@ -150,25 +174,24 @@ class BlockerAccessibilityService : AccessibilityService() {
         return null
     }
 
-    private fun showDisabledToggleOverlay(bounds: Rect) {
+    private fun showDisabledToggleOverlay(bounds: Rect, labelText: String) {
         mainHandler.post {
             try {
                 if (toggleLockOverlay == null) {
                     val pillBackground = GradientDrawable().apply {
                         shape = GradientDrawable.RECTANGLE
                         cornerRadius = 90f
-                        setColor(Color.parseColor("#E6BDBDBD")) // Greyed-out disabled look
+                        setColor(Color.parseColor("#E6BDBDBD"))
                         setStroke(3, Color.parseColor("#88757575"))
                     }
 
                     val view = TextView(this).apply {
-                        text = "Use Shield Real-Time Blocker   [LOCKED ON 🔒]"
+                        text = labelText
                         setTextColor(Color.parseColor("#616161"))
                         textSize = 16f
                         gravity = Gravity.CENTER_VERTICAL or Gravity.START
                         setPadding(56, 0, 56, 0)
                         background = pillBackground
-                        // Absorb all clicks so the underlying switch cannot be toggled off
                         isClickable = true
                         isFocusable = true
                     }
@@ -253,6 +276,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun processUrlOrSearchText(node: AccessibilityNodeInfo, text: String): Boolean {
         val lower = text.lowercase()
 
+        // A. Block adult domains & adult search keywords immediately
         if (HostsRepository.isUrlOrQueryBlocked(lower)) {
             if (node.isEditable) {
                 val args = Bundle()
@@ -267,23 +291,31 @@ class BlockerAccessibilityService : AccessibilityService() {
             return true
         }
 
-        if (!node.isFocused &&
-            (lower.contains("google.com/search?") || lower.contains("google.co.in/search?")) &&
-            !lower.contains("safe=active")
-        ) {
-            launchSafeSearchRedirect(text)
-            return true
+        // B. Enforce Strict SafeSearch across Google, Bing, and DuckDuckGo (No VPN required!)
+        if (!node.isFocused) {
+            // Google SafeSearch
+            if ((lower.contains("google.") && lower.contains("/search?")) && !lower.contains("safe=active")) {
+                launchSafeSearchRedirect(text, "safe=active")
+                return true
+            }
+            // Bing SafeSearch
+            if ((lower.contains("bing.com/search?")) && !lower.contains("adlt=strict")) {
+                launchSafeSearchRedirect(text, "adlt=strict")
+                return true
+            }
+            // DuckDuckGo SafeSearch
+            if ((lower.contains("duckduckgo.com/?q=")) && !lower.contains("kp=1")) {
+                launchSafeSearchRedirect(text, "kp=1")
+                return true
+            }
         }
 
         return false
     }
 
-    private fun launchSafeSearchRedirect(originalUrl: String) {
-        val safeUrl = if (originalUrl.startsWith("http")) {
-            "$originalUrl&safe=active"
-        } else {
-            "https://$originalUrl&safe=active"
-        }
+    private fun launchSafeSearchRedirect(originalUrl: String, safeParam: String) {
+        val base = if (originalUrl.startsWith("http")) originalUrl else "https://$originalUrl"
+        val safeUrl = "$base&$safeParam"
         val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(safeUrl)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
