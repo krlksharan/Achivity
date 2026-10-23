@@ -7,7 +7,7 @@
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:label="ShieldBlocker"
+        android:label="Achivity"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Blocker">
@@ -25,7 +25,7 @@
             android:name=".BlockerAccessibilityService"
             android:directBootAware="true"
             android:exported="true"
-            android:label="Shield Real-Time Blocker"
+            android:label="Achivity Real-Time Blocker"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -39,7 +39,7 @@
             android:name=".UninstallProtectionReceiver"
             android:description="@string/app_name"
             android:exported="true"
-            android:label="Shield Uninstall Protection"
+            android:label="Achivity Uninstall Protection"
             android:permission="android.permission.BIND_DEVICE_ADMIN">
             <meta-data
                 android:name="android.app.device_admin"

@@ -5,16 +5,21 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
+import android.view.Gravity
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
 class MainActivity : Activity() {
 
-    private lateinit var statusText: TextView
     private lateinit var btnAccessibility: Button
     private lateinit var btnSafeSearch: Button
     private lateinit var btnAdmin: Button
@@ -22,28 +27,117 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Deep Midnight & Gold-Indigo Gradient Background matching your Achivity Logo
+        val backgroundGradient = GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(
+                Color.parseColor("#030B1B"),
+                Color.parseColor("#0F172A"),
+                Color.parseColor("#1E1B4B")
+            )
+        )
+
+        val scrollView = ScrollView(this).apply {
+            background = backgroundGradient
+            isFillViewport = true
+        }
+
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 96, 48, 64)
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(56, 100, 56, 80)
         }
 
-        statusText = TextView(this).apply {
-            text = "Syncing GitHub Adult Hosts list..."
-            textSize = 16f
-            setPadding(0, 0, 0, 48)
+        // Frosted Glass Frame for the Achivity Logo
+        val logoGlassFrame = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            background = createGlassBox("#22FFFFFF", "#66FBBF24", 72f)
+            setPadding(20, 20, 20, 20)
+            layoutParams = LinearLayout.LayoutParams(280, 280).apply {
+                bottomMargin = 36
+            }
         }
 
-        btnAccessibility = Button(this).apply {
+        val logoImage = ImageView(this).apply {
+            // Uses app_logo.png if added to res/drawable, otherwise falls back to ic_launcher
+            val logoResId = resources.getIdentifier("app_logo", "drawable", packageName)
+            if (logoResId != 0) {
+                setImageResource(logoResId)
+            } else {
+                setImageResource(R.mipmap.ic_launcher)
+            }
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+        logoGlassFrame.addView(logoImage)
+
+        // App Header
+        val titleText = TextView(this).apply {
+            text = "ACHIVITY"
+            textSize = 28f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            gravity = Gravity.CENTER
+            letterSpacing = 0.12f
+        }
+
+        val subtitleText = TextView(this).apply {
+            text = "Focus on What Truly Matters"
+            textSize = 13.5f
+            setTextColor(Color.parseColor("#FDE68A")) // Soft gold accent matching the logo
+            gravity = Gravity.CENTER
+            setPadding(0, 10, 0, 56)
+        }
+
+        // Frosted Glass Caution Card
+        val cautionCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = createGlassBox("#26EF4444", "#55F87171", 44f)
+            setPadding(48, 42, 48, 42)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = 52
+            }
+        }
+
+        val cautionTitle = TextView(this).apply {
+            text = "⚠️ PERMANENT LOCK CAUTION"
+            textSize = 13.5f
+            setTextColor(Color.parseColor("#FCA5A5"))
+            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0.06f
+        }
+
+        val cautionDesc = TextView(this).apply {
+            text = "• Once installed and activated, Achivity cannot be uninstalled.\n" +
+                    "• Once Accessibility is enabled, the toggle switch cannot be disabled."
+            textSize = 13.5f
+            setTextColor(Color.parseColor("#FEE2E2"))
+            setPadding(0, 14, 0, 0)
+            setLineSpacing(10f, 1f)
+        }
+
+        cautionCard.addView(cautionTitle)
+        cautionCard.addView(cautionDesc)
+
+        // Button 1: Accessibility
+        btnAccessibility = createStyledButton().apply {
             setOnClickListener {
                 if (isAccessibilityEnabled()) {
-                    Toast.makeText(this@MainActivity, "Millisecond Blocker is already ACTIVE ✅", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Accessibility is already ACTIVE ✅", Toast.LENGTH_SHORT).show()
                 } else {
                     startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
             }
         }
 
-        btnSafeSearch = Button(this).apply {
+        // Button 2: SafeSearch Enforcer
+        btnSafeSearch = createStyledButton().apply {
             setOnClickListener {
                 Toast.makeText(
                     this@MainActivity,
@@ -53,7 +147,8 @@ class MainActivity : Activity() {
             }
         }
 
-        btnAdmin = Button(this).apply {
+        // Button 3: Uninstall Protection (Device Admin)
+        btnAdmin = createStyledButton().apply {
             setOnClickListener {
                 if (isDeviceAdminEnabled()) {
                     Toast.makeText(this@MainActivity, "Uninstall Protection is already ACTIVE ✅", Toast.LENGTH_SHORT).show()
@@ -61,26 +156,28 @@ class MainActivity : Activity() {
                     val compName = ComponentName(this@MainActivity, UninstallProtectionReceiver::class.java)
                     val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
                         putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, compName)
-                        putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Prevents unauthorized uninstallation.")
+                        putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Prevents unauthorized uninstallation of Achivity.")
                     }
                     startActivity(intent)
                 }
             }
         }
 
-        layout.addView(statusText)
+        layout.addView(logoGlassFrame)
+        layout.addView(titleText)
+        layout.addView(subtitleText)
+        layout.addView(cautionCard)
         layout.addView(btnAccessibility)
         layout.addView(btnSafeSearch)
         layout.addView(btnAdmin)
-        setContentView(layout)
+
+        scrollView.addView(layout)
+        setContentView(scrollView)
 
         updateButtonStates()
 
-        HostsRepository.initialize(this) { count ->
-            runOnUiThread {
-                statusText.text = "Active Protection: $count adult domains loaded from GitHub."
-            }
-        }
+        // Silently load and sync GitHub hosts in the background without showing a status box
+        HostsRepository.initialize(this)
     }
 
     override fun onResume() {
@@ -92,22 +189,53 @@ class MainActivity : Activity() {
         val accActive = isAccessibilityEnabled()
         val adminActive = isDeviceAdminEnabled()
 
-        btnAccessibility.text = if (accActive) {
-            "1. Acessibility: ACTIVE ✅"
+        if (accActive) {
+            btnAccessibility.text = "1. Accessibility: ACTIVE ✅"
+            btnAccessibility.background = createGlassBox("#2E10B981", "#8034D399", 38f)
         } else {
-            "1. Enable Acessibility"
+            btnAccessibility.text = "1. Enable Accessibility"
+            btnAccessibility.background = createGlassBox("#2638BDF8", "#667DD3FC", 38f)
         }
 
-        btnSafeSearch.text = if (accActive) {
-            "2. SafeSearch Enforcer: ACTIVE ✅"
+        if (accActive) {
+            btnSafeSearch.text = "2. SafeSearch Enforcer: ACTIVE ✅"
+            btnSafeSearch.background = createGlassBox("#2E10B981", "#8034D399", 38f)
         } else {
-            "2. SafeSearch Enforcer (Auto-Activates with Accessibility)"
+            btnSafeSearch.text = "2. SafeSearch Enforcer (Auto-Activates with Accessibility)"
+            btnSafeSearch.background = createGlassBox("#1AFFFFFF", "#33FFFFFF", 38f)
         }
 
-        btnAdmin.text = if (adminActive) {
-            "3. Uninstall Protection: ACTIVE ✅"
+        if (adminActive) {
+            btnAdmin.text = "3. Uninstall Protection: ACTIVE ✅"
+            btnAdmin.background = createGlassBox("#2E10B981", "#8034D399", 38f)
         } else {
-            "3. Enable Uninstall Protection"
+            btnAdmin.text = "3. Enable Uninstall Protection"
+            btnAdmin.background = createGlassBox("#2638BDF8", "#667DD3FC", 38f)
+        }
+    }
+
+    private fun createStyledButton(): Button {
+        return Button(this).apply {
+            isAllCaps = false
+            textSize = 14.5f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setPadding(42, 42, 42, 42)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = 28
+            }
+        }
+    }
+
+    private fun createGlassBox(fillHex: String, strokeHex: String, radius: Float): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = radius
+            setColor(Color.parseColor(fillHex))
+            setStroke(3, Color.parseColor(strokeHex))
         }
     }
 

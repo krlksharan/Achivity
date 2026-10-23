@@ -43,7 +43,6 @@ class BlockerAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val packageName = event?.packageName?.toString() ?: return
 
-        // 1. Ignore our own app, System UI, and Launcher
         if (packageName == applicationContext.packageName ||
             packageName == "com.android.systemui" ||
             packageName.contains("launcher")
@@ -54,7 +53,6 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         val rootNode = rootInActiveWindow ?: return
 
-        // 2. PERMANENT LOCK FOR ACCESSIBILITY & DEVICE ADMIN IN SETTINGS
         if (packageName.contains("settings") ||
             packageName.contains("packageinstaller") ||
             packageName.contains("permissioncontroller")
@@ -65,7 +63,6 @@ class BlockerAccessibilityService : AccessibilityService() {
             removeToggleOverlay()
         }
 
-        // 3. MILLISECOND BROWSER INTERCEPTION & SAFESEARCH ENFORCEMENT
         inspectBrowserNodes(rootNode)
     }
 
@@ -80,15 +77,15 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     private fun handleSettingsProtection(rootNode: AccessibilityNodeInfo) {
-        if (findNodeByTextOrDesc(rootNode, "Stop Shield Real-Time Blocker") != null ||
-            findNodeByTextOrDesc(rootNode, "Turn off Shield") != null
+        if (findNodeByTextOrDesc(rootNode, "Stop Achivity") != null ||
+            findNodeByTextOrDesc(rootNode, "Turn off Achivity") != null
         ) {
             clickCancelDialog(rootNode)
             return
         }
 
-        val toggleNode = findNodeByTextOrDesc(rootNode, "Use Shield Real-Time Blocker")
-        val optionsNode = findNodeByTextOrDesc(rootNode, "Shield Real-Time Blocker shortcut")
+        val toggleNode = findNodeByTextOrDesc(rootNode, "Use Achivity Real-Time Blocker")
+        val optionsNode = findNodeByTextOrDesc(rootNode, "Achivity Real-Time Blocker shortcut")
 
         if (toggleNode != null || optionsNode != null) {
             val bounds = Rect()
@@ -105,11 +102,11 @@ class BlockerAccessibilityService : AccessibilityService() {
                 )
             }
 
-            showDisabledToggleOverlay(bounds, "Use Shield Real-Time Blocker   [LOCKED ON 🔒]")
+            showDisabledToggleOverlay(bounds, "Use Achivity Real-Time Blocker   [LOCKED ON 🔒]")
             return
         }
 
-        val isOurDeviceAdminScreen = findNodeByTextOrDesc(rootNode, "Shield Uninstall Protection") != null
+        val isOurDeviceAdminScreen = findNodeByTextOrDesc(rootNode, "Achivity Uninstall Protection") != null
         if (isOurDeviceAdminScreen) {
             if (!isDeviceAdminCurrentlyActive()) {
                 removeToggleOverlay()
@@ -121,7 +118,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     val container = findClickableParent(deactivateNode) ?: deactivateNode
                     container.getBoundsInScreen(bounds)
                     if (bounds.width() > 100 && bounds.height() > 40) {
-                        showDisabledToggleOverlay(bounds, "Admin Uninstall Protection   [LOCKED ON 🔒]")
+                        showDisabledToggleOverlay(bounds, "Achivity Admin Protection   [LOCKED ON 🔒]")
                     }
                 }
                 performGlobalAction(GLOBAL_ACTION_BACK)
@@ -129,7 +126,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             }
         }
 
-        val isOurAppInfo = findNodeByTextOrDesc(rootNode, "ShieldBlocker") != null &&
+        val isOurAppInfo = findNodeByTextOrDesc(rootNode, "Achivity") != null &&
                 (findNodeByTextOrDesc(rootNode, "Force stop") != null ||
                         findNodeByTextOrDesc(rootNode, "Storage & cache") != null)
 
@@ -276,7 +273,6 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun processUrlOrSearchText(node: AccessibilityNodeInfo, text: String): Boolean {
         val lower = text.lowercase()
 
-        // A. Block adult domains & adult search keywords immediately
         if (HostsRepository.isUrlOrQueryBlocked(lower)) {
             if (node.isEditable) {
                 val args = Bundle()
@@ -291,31 +287,23 @@ class BlockerAccessibilityService : AccessibilityService() {
             return true
         }
 
-        // B. Enforce Strict SafeSearch across Google, Bing, and DuckDuckGo (No VPN required!)
-        if (!node.isFocused) {
-            // Google SafeSearch
-            if ((lower.contains("google.") && lower.contains("/search?")) && !lower.contains("safe=active")) {
-                launchSafeSearchRedirect(text, "safe=active")
-                return true
-            }
-            // Bing SafeSearch
-            if ((lower.contains("bing.com/search?")) && !lower.contains("adlt=strict")) {
-                launchSafeSearchRedirect(text, "adlt=strict")
-                return true
-            }
-            // DuckDuckGo SafeSearch
-            if ((lower.contains("duckduckgo.com/?q=")) && !lower.contains("kp=1")) {
-                launchSafeSearchRedirect(text, "kp=1")
-                return true
-            }
+        if (!node.isFocused &&
+            (lower.contains("google.com/search?") || lower.contains("google.co.in/search?")) &&
+            !lower.contains("safe=active")
+        ) {
+            launchSafeSearchRedirect(text)
+            return true
         }
 
         return false
     }
 
-    private fun launchSafeSearchRedirect(originalUrl: String, safeParam: String) {
-        val base = if (originalUrl.startsWith("http")) originalUrl else "https://$originalUrl"
-        val safeUrl = "$base&$safeParam"
+    private fun launchSafeSearchRedirect(originalUrl: String) {
+        val safeUrl = if (originalUrl.startsWith("http")) {
+            "$originalUrl&safe=active"
+        } else {
+            "https://$originalUrl&safe=active"
+        }
         val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(safeUrl)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
