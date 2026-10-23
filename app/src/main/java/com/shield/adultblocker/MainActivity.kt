@@ -27,7 +27,6 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Deep Midnight & Gold-Indigo Gradient Background matching your Achivity Logo
         val backgroundGradient = GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
             intArrayOf(
@@ -48,33 +47,30 @@ class MainActivity : Activity() {
             setPadding(56, 100, 56, 80)
         }
 
-        // Frosted Glass Frame for the Achivity Logo
         val logoGlassFrame = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            background = createGlassBox("#22FFFFFF", "#66FBBF24", 72f)
-            setPadding(20, 20, 20, 20)
+            background = createGlassBox("#22FFFFFF", "#66FBBF24", 64f)
+            setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(280, 280).apply {
                 bottomMargin = 36
             }
+            clipToOutline = true
         }
 
         val logoImage = ImageView(this).apply {
-            // Uses app_logo.png if added to res/drawable, otherwise falls back to ic_launcher
-            val logoResId = resources.getIdentifier("app_logo", "drawable", packageName)
-            if (logoResId != 0) {
-                setImageResource(logoResId)
-            } else {
-                setImageResource(R.mipmap.ic_launcher)
-            }
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            setImageResource(R.mipmap.ic_launcher_foreground)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            scaleX = 1.65f
+            scaleY = 1.65f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.MATCH_PARENT
             )
         }
+
         logoGlassFrame.addView(logoImage)
 
-        // App Header
+
         val titleText = TextView(this).apply {
             text = "ACHIVITY"
             textSize = 28f
@@ -85,14 +81,14 @@ class MainActivity : Activity() {
         }
 
         val subtitleText = TextView(this).apply {
-            text = "Focus on What Truly Matters"
-            textSize = 13.5f
-            setTextColor(Color.parseColor("#FDE68A")) // Soft gold accent matching the logo
+            text = "Just Achieve Your Goal"
+            textSize = 14f
+            setTextColor(Color.parseColor("#FDE68A"))
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             gravity = Gravity.CENTER
             setPadding(0, 10, 0, 56)
         }
 
-        // Frosted Glass Caution Card
         val cautionCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = createGlassBox("#26EF4444", "#55F87171", 44f)
@@ -125,7 +121,6 @@ class MainActivity : Activity() {
         cautionCard.addView(cautionTitle)
         cautionCard.addView(cautionDesc)
 
-        // Button 1: Accessibility
         btnAccessibility = createStyledButton().apply {
             setOnClickListener {
                 if (isAccessibilityEnabled()) {
@@ -136,7 +131,6 @@ class MainActivity : Activity() {
             }
         }
 
-        // Button 2: SafeSearch Enforcer
         btnSafeSearch = createStyledButton().apply {
             setOnClickListener {
                 Toast.makeText(
@@ -147,7 +141,6 @@ class MainActivity : Activity() {
             }
         }
 
-        // Button 3: Uninstall Protection (Device Admin)
         btnAdmin = createStyledButton().apply {
             setOnClickListener {
                 if (isDeviceAdminEnabled()) {
@@ -175,8 +168,6 @@ class MainActivity : Activity() {
         setContentView(scrollView)
 
         updateButtonStates()
-
-        // Silently load and sync GitHub hosts in the background without showing a status box
         HostsRepository.initialize(this)
     }
 
