@@ -67,9 +67,7 @@ class MainActivity : Activity() {
                 LinearLayout.LayoutParams.MATCH_PARENT
             )
         }
-
         logoGlassFrame.addView(logoImage)
-
 
         val titleText = TextView(this).apply {
             text = "ACHIVITY"
@@ -86,7 +84,7 @@ class MainActivity : Activity() {
             setTextColor(Color.parseColor("#FDE68A"))
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             gravity = Gravity.CENTER
-            setPadding(0, 10, 0, 56)
+            setPadding(0, 10, 0, 40)
         }
 
         val cautionCard = LinearLayout(this).apply {
@@ -102,7 +100,7 @@ class MainActivity : Activity() {
         }
 
         val cautionTitle = TextView(this).apply {
-            text = "⚠️ PERMANENT LOCK CAUTION"
+            text = "⚠️ PERMANENT LOCK"
             textSize = 13.5f
             setTextColor(Color.parseColor("#FCA5A5"))
             typeface = Typeface.DEFAULT_BOLD
@@ -110,8 +108,7 @@ class MainActivity : Activity() {
         }
 
         val cautionDesc = TextView(this).apply {
-            text = "• Once installed and activated, Achivity cannot be uninstalled.\n" +
-                    "• Once Accessibility is enabled, the toggle switch cannot be disabled."
+            text = "• Once Accessibility and Uninstall Protection are activated, they CANNOT be turned off or uninstalled from Settings"
             textSize = 13.5f
             setTextColor(Color.parseColor("#FEE2E2"))
             setPadding(0, 14, 0, 0)
@@ -146,12 +143,19 @@ class MainActivity : Activity() {
                 if (isDeviceAdminEnabled()) {
                     Toast.makeText(this@MainActivity, "Uninstall Protection is already ACTIVE ✅", Toast.LENGTH_SHORT).show()
                 } else {
-                    val compName = ComponentName(this@MainActivity, UninstallProtectionReceiver::class.java)
-                    val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                        putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, compName)
-                        putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Prevents unauthorized uninstallation of Achivity.")
+                    try {
+                        val compName = ComponentName(this@MainActivity, UninstallProtectionReceiver::class.java)
+                        val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, compName)
+                            putExtra(
+                                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                                "Prevents unauthorized uninstallation of Achivity."
+                            )
+                        }
+                        startActivityForResult(intent, 1001)
+                    } catch (e: Exception) {
+                        Toast.makeText(this@MainActivity, "Admin Error: ${e.message}", Toast.LENGTH_LONG).show()
                     }
-                    startActivity(intent)
                 }
             }
         }
@@ -173,6 +177,11 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        updateButtonStates()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
         updateButtonStates()
     }
 
@@ -232,7 +241,10 @@ class MainActivity : Activity() {
 
     private fun isAccessibilityEnabled(): Boolean {
         val expectedComponent = ComponentName(this, BlockerAccessibilityService::class.java)
-        val enabledServices = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
         return enabledServices.split(":").any { ComponentName.unflattenFromString(it) == expectedComponent }
     }
 

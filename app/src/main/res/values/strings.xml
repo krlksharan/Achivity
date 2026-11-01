@@ -1,3 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Blocker</string>
+    <string name="app_name">Achivity</string>
+    <string name="accessibility_service_label">Achivity</string>
+    <string name="accessibility_service_description">Blocks adult content and enforces SafeSearch in real time.</string>
 </resources>

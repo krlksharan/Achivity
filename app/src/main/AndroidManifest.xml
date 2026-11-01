@@ -4,29 +4,47 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Allows Android 11+ to automatically detect all installed web browsers & Settings -->
+    <queries>
+        <package android:name="com.android.settings" />
+        <package android:name="com.samsung.android.settings" />
+        <package android:name="com.samsung.accessibility" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="http" />
+        </intent>
+    </queries>
+
     <application
-        android:allowBackup="false"
+        android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="Achivity"
         android:roundIcon="@mipmap/ic_launcher_round"
-
         android:supportsRtl="true"
-        android:theme="@style/Theme.Blocker">
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
+        <!-- Main Activity -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
+        <!-- Accessibility Service -->
         <service
             android:name=".BlockerAccessibilityService"
-            android:directBootAware="true"
             android:exported="true"
-            android:label="Achivity Real-Time Blocker"
+            android:label="@string/accessibility_service_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -36,11 +54,11 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- Device Admin / Uninstall Protection Receiver -->
         <receiver
             android:name=".UninstallProtectionReceiver"
-            android:description="@string/app_name"
             android:exported="true"
-            android:label="Achivity Uninstall Protection"
+            android:label="Achivity"
             android:permission="android.permission.BIND_DEVICE_ADMIN">
             <meta-data
                 android:name="android.app.device_admin"
@@ -50,17 +68,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- Boot Receiver -->
         <receiver
             android:name=".BootReceiver"
-            android:directBootAware="true"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 
     </application>
+
 </manifest>

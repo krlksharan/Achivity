@@ -5,110 +5,122 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
-import java.net.URI
 import java.net.URL
-import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 object HostsRepository {
-    private const val GITHUB_HOSTS_URL =
-        "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts"
+
+    private const val HOSTS_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts"
     private const val CACHE_FILE_NAME = "blocked_hosts_cache.txt"
 
-    private val blockedDomains = Collections.synchronizedSet(HashSet<String>(90000))
+    private val blockedDomains: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val executor = Executors.newSingleThreadExecutor()
+    @Volatile
+    private var isInitialized = false
 
-    private val blockedKeywords = listOf(
-        "pornhub", "xvideos", "xnxx", "xhamster", "redtube", "youporn",
-        "spankbang", "eporner", "brazzers", "onlyfans", "chaturbate",
-        "stripchat", "rule34", "hentai", "nhentai", "hqporner", "beeg",
-        "porn", "xxx", "nsfw", "sexvideo", "nudity", "camgirl"
+    // Core high-priority domains loaded immediately in memory
+    private val coreBlockedDomains = listOf(
+        "pornhub.com", "xvideos.com", "xnxx.com", "xhamster.com", "redtube.com",
+        "youporn.com", "spankbang.com", "eporner.com", "brazzers.com", "onlyfans.com",
+        "chaturbate.com", "stripchat.com", "cam4.com", "livejasmin.com", "bongacams.com",
+        "rule34.xxx", "nhentai.net", "hanime.tv", "motherless.com", "txxx.com",
+        "hqporner.com", "beeg.com", "daftsex.com", "fuq.com", "porn.com"
     )
 
-    fun initialize(context: Context, onComplete: ((Int) -> Unit)? = null) {
-        Executors.newSingleThreadExecutor().execute {
-            val cacheFile = File(context.filesDir, CACHE_FILE_NAME)
+    fun initialize(context: Context) {
+        if (isInitialized) return
+        isInitialized = true
+        blockedDomains.addAll(coreBlockedDomains)
 
-            if (cacheFile.exists()) {
-                loadFromFile(cacheFile)
+        val appContext = context.applicationContext
+        executor.execute {
+            val cacheFile = File(appContext.filesDir, CACHE_FILE_NAME)
+            if (cacheFile.exists() && cacheFile.length() > 1024) {
+                loadFromCache(cacheFile)
+            } else {
+                downloadAndCacheHosts(cacheFile)
             }
-
-            try {
-                val url = URL(GITHUB_HOSTS_URL)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.connectTimeout = 10000
-                connection.readTimeout = 15000
-
-                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                    val tempSet = HashSet<String>(90000)
-                    BufferedReader(InputStreamReader(connection.inputStream)).use { reader ->
-                        cacheFile.bufferedWriter().use { writer ->
-                            var line: String?
-                            while (reader.readLine().also { line = it } != null) {
-                                val trimmed = line!!.trim()
-                                if (trimmed.startsWith("0.0.0.0 ")) {
-                                    val domain = trimmed.substringAfter("0.0.0.0 ").trim().lowercase()
-                                    if (domain.isNotEmpty() && domain != "0.0.0.0") {
-                                        tempSet.add(domain)
-                                        writer.write("$domain\n")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    synchronized(blockedDomains) {
-                        blockedDomains.clear()
-                        blockedDomains.addAll(tempSet)
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            onComplete?.invoke(blockedDomains.size)
         }
     }
 
-    private fun loadFromFile(file: File) {
+    /**
+     * Checks if a URL, domain, or search text matches any blocked adult domain in <0.01ms.
+     */
+    fun isBlocked(input: String): Boolean {
+        val clean = input.lowercase().trim()
+            .removePrefix("https://")
+            .removePrefix("http://")
+            .removePrefix("www.")
+            .removePrefix("m.")
+
+        val host = clean.substringBefore("/").substringBefore("?").substringBefore(" ")
+        if (host.isEmpty()) return false
+
+        // Direct O(1) match
+        if (blockedDomains.contains(host)) return true
+
+        // Check parent domain if subdomain is used (e.g., es.pornhub.com -> pornhub.com)
+        val parts = host.split(".")
+        if (parts.size >= 2) {
+            val rootDomain = "${parts[parts.size - 2]}.${parts[parts.size - 1]}"
+            if (blockedDomains.contains(rootDomain)) return true
+        }
+
+        return false
+    }
+
+    // Alias in case any other class calls isDomainBlocked
+    fun isDomainBlocked(domain: String): Boolean = isBlocked(domain)
+
+    private fun loadFromCache(file: File) {
         try {
-            file.forEachLine { line ->
-                val domain = line.trim()
-                if (domain.isNotEmpty()) blockedDomains.add(domain)
+            file.bufferedReader().useLines { lines ->
+                lines.forEach { line ->
+                    val d = line.trim()
+                    if (d.isNotEmpty()) blockedDomains.add(d)
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    fun isUrlOrQueryBlocked(input: String): Boolean {
-        val clean = input.trim().lowercase()
-        if (clean.isEmpty()) return false
-
-        val host = extractDomain(clean)
-        if (host.isNotEmpty()) {
-            if (blockedDomains.contains(host) || blockedDomains.contains("www.$host")) {
-                return true
+    private fun downloadAndCacheHosts(cacheFile: File) {
+        try {
+            val url = URL(HOSTS_URL)
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10000
+                readTimeout = 15000
+                requestMethod = "GET"
             }
-            val parts = host.split(".")
-            if (parts.size >= 2) {
-                val rootDomain = "${parts[parts.size - 2]}.${parts[parts.size - 1]}"
-                if (blockedDomains.contains(rootDomain)) return true
-            }
-        }
 
-        for (keyword in blockedKeywords) {
-            if (Regex("\\b$keyword\\b").containsMatchIn(clean) || clean.contains(keyword)) {
-                return true
+            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                val tempSet = HashSet<String>(80000)
+                BufferedReader(InputStreamReader(connection.inputStream)).use { reader ->
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        val trimmed = line!!.trim()
+                        if (trimmed.startsWith("0.0.0.0 ")) {
+                            val domain = trimmed.substringAfter("0.0.0.0 ").substringBefore("#").trim().lowercase()
+                            if (domain.isNotEmpty() && domain != "0.0.0.0" && !domain.startsWith("www.")) {
+                                tempSet.add(domain)
+                            }
+                        }
+                    }
+                }
+                if (tempSet.isNotEmpty()) {
+                    blockedDomains.addAll(tempSet)
+                    cacheFile.bufferedWriter().use { writer ->
+                        tempSet.forEach { d ->
+                            writer.write(d)
+                            writer.newLine()
+                        }
+                    }
+                }
             }
-        }
-        return false
-    }
-
-    private fun extractDomain(input: String): String {
-        return try {
-            val formatted = if (!input.startsWith("http")) "https://$input" else input
-            val uri = URI(formatted)
-            (uri.host ?: input).removePrefix("www.").lowercase()
         } catch (e: Exception) {
-            input.substringBefore("/").substringBefore("?").removePrefix("www.").lowercase()
+            e.printStackTrace()
         }
     }
 }
