@@ -1,4 +1,4 @@
-# Achivity (Blocky-Block)
+# Achivity
 
 **Achivity** is a lightweight, secure, and native Android content-blocking application built in Kotlin. Designed to help users maintain focus and block access to adult and restricted websites system-wide.
 
